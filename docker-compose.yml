@@ -1,23 +1,5 @@
 services:
 
-  backend:
-    build: ./backend
-    container_name: cloudeats-backend
-    ports:
-      - "3000:3000"
-    environment:
-      DB_HOST:     db
-      DB_USER:     cloudeats_user
-      DB_PASSWORD: cloudeats_password
-      DB_NAME:     cloudeats_db
-      PORT:        3000
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - cloudeats-network
-    restart: on-failure
-
   db:
     image: mysql:8.0
     container_name: cloudeats-db
@@ -37,9 +19,96 @@ services:
     networks:
       - cloudeats-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: cloudeats-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - cloudeats-network
+
+  mongo:
+    image: mongo:7
+    container_name: cloudeats-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - cloudeats-network
+
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - MYSQL_HOST=cloudeats-db
+      - MYSQL_USER=cloudeats_user
+      - MYSQL_PASSWORD=cloudeats_password
+      - MYSQL_DATABASE=cloudeats_db
+      - JWT_SECRET=your_jwt_secret
+      - PORT=3001
+    depends_on:
+      - db
+    networks:
+      - cloudeats-network
+    restart: unless-stopped
+
+  menu-service:
+    build: ./services/menu-service
+    ports:
+      - "3002:3002"
+    environment:
+      - MYSQL_HOST=cloudeats-db
+      - MYSQL_USER=cloudeats_user
+      - MYSQL_PASSWORD=cloudeats_password
+      - MYSQL_DATABASE=cloudeats_db
+      - PORT=3002
+    depends_on:
+      - db
+    networks:
+      - cloudeats-network
+    restart: unless-stopped
+
+  order-service:
+    build: ./services/order-service
+    ports:
+      - "3003:3003"
+    environment:
+      - MONGO_URL=mongodb://cloudeats-mongo:27017
+      - REDIS_URL=redis://cloudeats-redis:6379
+      - JWT_SECRET=your_jwt_secret
+      - PORT=3003
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - cloudeats-network
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - USER_SERVICE_URL=http://user-service:3001
+      - MENU_SERVICE_URL=http://menu-service:3002
+      - ORDER_SERVICE_URL=http://order-service:3003
+      - JWT_SECRET=your_jwt_secret
+      - PORT=8000
+    depends_on:
+      - user-service
+      - menu-service
+      - order-service
+    networks:
+      - cloudeats-network
+    restart: unless-stopped
+
 volumes:
   mysql-data:
+  mongo-data:
 
 networks:
   cloudeats-network:
+    name: cloudeats-network
     driver: bridge
