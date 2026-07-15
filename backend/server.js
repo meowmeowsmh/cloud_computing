@@ -8,15 +8,25 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// ════════════════════════════════════════════════════
+// 🟢 USER SERVICE ZONE  →  services/user-service/
+//    Deps: express · mysql2 · bcrypt · jsonwebtoken
+//    DB:   MySQL  (users table)
+// ════════════════════════════════════════════════════
 app.use('/api/auth', authRoutes);
-app.use(express.static('public'));        // Serve HTML/CSS from /public
+app.use(express.static('public'));
 
 // ── HEALTH CHECK ───────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'cloudeats-backend' });
 });
 
-// ── GET ALL MENU ITEMS ──────────────────────────────
+// ════════════════════════════════════════════════════
+// 🔵 MENU SERVICE ZONE  →  services/menu-service/
+//    Deps: express · mysql2
+//    DB:   MySQL  (menu_items table)
+// ════════════════════════════════════════════════════
 app.get('/api/menu', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM menu_items ORDER BY category, name');
@@ -27,7 +37,6 @@ app.get('/api/menu', async (req, res) => {
   }
 });
 
-// ── GET MENU BY CATEGORY ───────────────────────────
 app.get('/api/menu/category/:category', async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -39,5 +48,12 @@ app.get('/api/menu/category/:category', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ════════════════════════════════════════════════════
+// 🟣 ORDER SERVICE ZONE  →  services/order-service/
+//    Deps: express · mongodb · redis · jsonwebtoken
+//    DB:   MongoDB (orders) + Redis (cart)
+// ════════════════════════════════════════════════════
+// (Order routes are currently separate – will be extracted in Part 5)
 
 app.listen(PORT, () => console.log(`CloudEats backend running on port ${PORT}`));
