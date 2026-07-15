@@ -1,0 +1,36 @@
+name: Run Automated Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-menu-service:
+    name: Menu Service Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: services/menu-service/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./services/menu-service
+        run: npm install
+
+      - name: Run tests
+        working-directory: ./services/menu-service
+        env:
+          NODE_ENV: test
+        run: npm test
