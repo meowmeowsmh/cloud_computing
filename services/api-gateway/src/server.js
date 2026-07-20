@@ -5,7 +5,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// app.use(express.json());   // ← REMOVED – proxy forwards raw body
 
 // ── Log all incoming requests ──
 app.use((req, res, next) => {
@@ -47,25 +47,23 @@ function proxy(target) {
   return createProxyMiddleware({
     target,
     changeOrigin: true,
-    pathRewrite: (path, req) => {
-      // Forward the full original URL (including /api/menu, /api/auth, etc.)
-      return req.originalUrl;
+    // Preserve the full original path (e.g., /api/auth/register)
+    pathRewrite: (path, req) => req.originalUrl,
+    onError: (err, req, res) => {
+      console.error('Proxy error:', err.message);
+      res.status(503).json({ error: 'Upstream service unavailable', target });
     },
-    on: {
-      error: (err, req, res) => {
-        console.error('Proxy error:', err.message);
-        res.status(503).json({ error: 'Upstream service unavailable', target });
-      },
-      proxyReq: (proxyReq, req, res) => {
-        console.log(`➡️ Proxying ${req.method} ${req.originalUrl} to ${target}`);
-      }
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`➡️ Proxying ${req.method} ${req.originalUrl} to ${target}`);
     }
   });
 }
+
 // Public routes (no auth)
 app.use('/api/auth', proxy(SERVICES.user));   // register, login
 app.use('/api/menu', proxy(SERVICES.menu));   // public menu
-
+app.use('/api/users', proxy(SERVICES.user));
+app.use('/api/admin', proxy(SERVICES.user));
 // Protected routes
 app.use('/api/users', requireAuth, proxy(SERVICES.user));
 app.use('/api/cart', requireAuth, proxy(SERVICES.order));
