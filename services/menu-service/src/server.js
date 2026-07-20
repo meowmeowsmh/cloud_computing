@@ -43,7 +43,12 @@ app.get('/api/menu/category/:category', async (req, res) => {
   }
 });
 
-// ── GET single menu item ──
+// ── NEW: Health check for /api/menu/health (so it doesn't match :id) ──
+app.get('/api/menu/health', (req, res) => {
+  res.json({ status: 'ok', service: 'menu-service', port: 3002 });
+});
+
+// ── GET single menu item (must come AFTER /api/menu/health) ──
 app.get('/api/menu/:id', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM menu_items WHERE id = ?', [req.params.id]);
@@ -56,19 +61,15 @@ app.get('/api/menu/:id', async (req, res) => {
 
 // ── Rating validation (pure logic, no side effects) ──
 function validateRating(rating) {
-  // Check if rating is provided
   if (rating === undefined || rating === null) {
     return { valid: false, error: 'Rating is required' };
   }
-  // Check if it's a number
   if (typeof rating !== 'number') {
     return { valid: false, error: 'Rating must be a number' };
   }
-  // Check if it's a whole number (integer)
   if (!Number.isInteger(rating)) {
     return { valid: false, error: 'Rating must be a whole number' };
   }
-  // Check range 1-5
   if (rating < 1 || rating > 5) {
     return { valid: false, error: 'Rating must be between 1 and 5' };
   }
@@ -82,7 +83,7 @@ if (process.env.NODE_ENV !== 'test') {
   );
 }
 
-// ── Export for testing (only when NODE_ENV=test) ──
+// ── Export for testing ──
 if (process.env.NODE_ENV === 'test') {
   module.exports = { validateRating };
 }
