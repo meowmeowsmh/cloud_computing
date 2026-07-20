@@ -14,21 +14,35 @@ app.get('/health', (req, res) =>
 // ── MongoDB ──
 const mongoClient = new MongoClient(process.env.MONGO_URL || 'mongodb://mongo:27017');
 let ordersDb;
-mongoClient.connect().then(() => {
-  ordersDb = mongoClient.db('cloudeats_db');
-  console.log('[order-service] MongoDB connected');
-}).catch(err => console.error('[order-service] MongoDB error:', err));
+mongoClient.connect()
+  .then(() => {
+    ordersDb = mongoClient.db('cloudeats_db');
+    console.log('[order-service] MongoDB connected');
+  })
+  .catch(err => console.error('[order-service] MongoDB connection error:', err.message));
 
-// ── Redis ──
+// ── Redis (with error handling) ──
 const redisClient = redis.createClient({ url: process.env.REDIS_URL || 'redis://redis:6379' });
-redisClient.connect().then(() => console.log('[order-service] Redis connected'));
 
-// ── Placeholder routes (you'll implement full ones later) ──
+// Listen to Redis errors (prevents uncaught exceptions)
+redisClient.on('error', (err) => {
+  console.error('[order-service] Redis error:', err.message);
+});
+
+// Connect – catch rejection so the server stays up
+redisClient.connect()
+  .then(() => console.log('[order-service] Redis connected'))
+  .catch(err => console.error('[order-service] Redis initial connection failed:', err.message));
+
+// ── Routes ──
 app.get('/api/cart/:userId', async (req, res) => {
   try {
     const cart = await redisClient.get(`cart:${req.params.userId}`);
     res.json(cart ? JSON.parse(cart) : { items: [], total: 0 });
-  } catch (e) { res.status(500).json({ error: 'Redis error' }); }
+  } catch (e) {
+    // If Redis is down, return empty cart gracefully
+    res.json({ items: [], total: 0 });
+  }
 });
 
 app.post('/api/orders', async (req, res) => {
@@ -36,7 +50,10 @@ app.post('/api/orders', async (req, res) => {
     const order = { ...req.body, placedAt: new Date(), status: 'pending' };
     const result = await ordersDb.collection('orders').insertOne(order);
     res.status(201).json({ message: 'Order placed', orderId: result.insertedId });
-  } catch (e) { res.status(500).json({ error: 'DB error' }); }
+  } catch (e) {
+    console.error('[order-service] Order creation error:', e.message);
+    res.status(500).json({ error: 'DB error' });
+  }
 });
 
 const PORT = process.env.PORT || 3003;
